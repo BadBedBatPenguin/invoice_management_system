@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import utils
-import validation_models
-from database import async_session
+from utils import get_unique_filename, save_to_file_system
+from models import invoices as invoice_models
+from database.database import async_session
 from settings import file_management_settings
-from xml_parser import InvoiceParser
+from parsers.xml_parser import InvoiceParser
+from database.invoices import get_all_invoices, get_invoice, write_invoice
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -27,18 +28,18 @@ async def get_session() -> AsyncSession:
         yield session
 
 
-@router.get("/invoices/get", response_model=list[validation_models.InvoiceRead])
+@router.get("/invoices/get", response_model=list[invoice_models.InvoiceRead])
 async def read_invoices(
     session: AsyncSession = Depends(get_session),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    invoices = await utils.get_all_invoices(session, limit, offset)
+    invoices = await get_all_invoices(session, limit, offset)
     return [
-        validation_models.InvoiceRead(
+        invoice_models.InvoiceRead(
             created_at=datetime.fromtimestamp(invoice.created_at).isoformat() + "Z",
             id=invoice.id,
-            metadata=validation_models.InvoiceMetadataRead(
+            metadata=invoice_models.InvoiceMetadataRead(
                 **invoice.invoice_metadata.__dict__
             ),
         )
@@ -52,16 +53,16 @@ async def create_invoice(
 ):
     try:
 
-        file_path = utils.get_unique_filename(
+        file_path = get_unique_filename(
             file_management_settings.xml_files_directory,
             file.filename if file.filename else "",
         )
 
-        utils.save_to_file_system(file_path, file)
+        save_to_file_system(file_path, file)
 
         data = InvoiceParser(file_path).parse()
 
-        await utils.create_invoice(
+        await write_invoice(
             session=session,
             filepath=str(file_path),
             created_at=datetime.now(),
@@ -84,7 +85,7 @@ async def create_invoice(
 async def get_invoice_xml(
     invoice_id: int, session: AsyncSession = Depends(get_session)
 ):
-    invoice = await utils.get_invoice(session, invoice_id)
+    invoice = await get_invoice(session, invoice_id)
     if not invoice:
         raise HTTPException(
             status_code=404,

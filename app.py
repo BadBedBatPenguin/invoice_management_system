@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from database import Base, engine
+from database.database import Base, engine
 from routers import invoices
 from settings import file_management_settings
 

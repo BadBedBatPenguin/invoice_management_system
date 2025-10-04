@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database import Base
+from database.database import Base
 
 
 class Invoice(Base):
